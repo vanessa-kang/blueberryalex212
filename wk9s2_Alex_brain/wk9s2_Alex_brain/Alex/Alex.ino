@@ -1,15 +1,14 @@
-#include <serialize.h>
-
+#include "serialize.h"
 #include "packet.h"
 #include "constants.h"
 
 typedef enum
 {
-  STOP=0,
-  FORWARD=1,
-  REVERSE=2,
-  LEFT=3,
-  RIGHT=4
+  STOP = 0,
+  FORWARD = 1,
+  REVERSE = 2,
+  LEFT = 3,
+  RIGHT = 4
 } TDirection;
 
 volatile TDirection dir = STOP;
@@ -28,6 +27,9 @@ volatile TDirection dir = STOP;
 // by taking revs * WHEEL_CIRC
 
 #define WHEEL_CIRC          21
+
+// Turning radius of Alex, for turns
+#define RADIUS              10
 
 // Motor control pins. You need to adjust these till
 // Alex moves in the correct direction
@@ -51,7 +53,7 @@ volatile unsigned long rrT;
 volatile unsigned long lfTTurn;
 volatile unsigned long rfTTurn;
 volatile unsigned long lrTTurn;
-volatile unsigned long rrTTurn;case REVERSE
+volatile unsigned long rrTTurn;
 
 // Store the revolutions on Alex's left
 // and right wheels
@@ -61,6 +63,8 @@ volatile unsigned long rightRevs;
 // Forward and backward distance traveled
 volatile unsigned long forwardDist;
 volatile unsigned long reverseDist;
+volatile unsigned long leftDist;
+volatile unsigned long rightDist;
 
 //Keep track of whether we have moved a commanded distance
 unsigned long deltaDist;
@@ -96,7 +100,7 @@ void sendStatus() {
   TPacket statusPacket;
   statusPacket.packetType = PACKET_TYPE_RESPONSE;
   statusPacket.command = RESP_STATUS;
-  
+
   statusPacket.params[0] = lfT;
   statusPacket.params[1] = rfT;
   statusPacket.params[2] = lrT;
@@ -186,23 +190,23 @@ void sendResponse(TPacket *packet) {
 // Enable pull up resistors on pins 2 and 3
 void enablePullups() {
   cli();
-  DDRD &= ~(0b00001100); //set Arduino pins 2 and 3 as input
+  DDRD &= 0b11110011; //set Arduino pins 2 and 3 as input
   PORTD |= 0b00001100; //drive HIGH to enable pull-up resistors
   sei();
 }
 
 // Functions to be called by INT0 and INT1 ISRs.
 void leftISR() {
-  switch(dir) {
-    case FORWARD: lfT++; forwardDist = (unsigned long) ((float) lfT / COUNTS_PER_REV * WHEEL_CIRC); break;
-    case REVERSE: lrT++; reverseDist = (unsigned long) ((float) lrT / COUNTS_PER_REV * WHEEL_CIRC); break;
-    case LEFT: lrTTurn++; break;
-    case RIGHT: lfTTurn++; break;
+  switch (dir) {
+    case FORWARD: lfT++; forwardDist = (unsigned long) ((float) lfT / COUNTS_PER_REV * WHEEL_CIRC);break;
+    case REVERSE: lrT++; reverseDist = (unsigned long) ((float) lrT / COUNTS_PER_REV * WHEEL_CIRC);break;
+    case LEFT: lrTTurn++; leftDist = (unsigned long) ((float) lrTTurn / COUNTS_PER_REV * WHEEL_CIRC);break;
+    case RIGHT: lfTTurn++; rightDist = (unsigned long) ((float) lrT / COUNTS_PER_REV * WHEEL_CIRC);break;
   }
 }
 
 void rightISR() {
-  switch(dir) {
+  switch (dir) {
     case FORWARD: rfT++; break;
     case REVERSE: rrT++; break;
     case LEFT: rfTTurn++; break;
@@ -215,7 +219,7 @@ void rightISR() {
 // for falling edge triggered. Use bare-metal.
 void setupEINT() {
   cli();
-  EICRA |= 0b00001010; //faling edge for INT1 and INT0
+  EICRA |= 0b00001010; //falling edge for INT1 and INT0
   EIMSK |= 0b00000011; //activate INT1 and INT0
   sei();
 }
@@ -328,18 +332,14 @@ void forward(float dist, float speed)
 {
   dir = FORWARD;
 
-  if(dist)
+  if (dist)
     deltaDist = dist;
   else
     deltaDist = 99999999;
 
   newDist = forwardDist + deltaDist;
-  
-  int val = pwmVal(speed);
 
-  // For now we will ignore dist and move
-  // forward indefinitely. We will fix this
-  // in Week 9.
+  int val = pwmVal(speed);
 
   // LF = Left forward pin, LR = Left reverse pin
   // RF = Right forward pin, RR = Right reverse pin
@@ -360,18 +360,14 @@ void reverse(float dist, float speed)
 {
   dir = REVERSE;
 
-  if(dist)
+  if (dist)
     deltaDist = dist;
   else
     deltaDist = 99999999;
 
   newDist = reverseDist + deltaDist;
-  
-  int val = pwmVal(speed);
 
-  // For now we will ignore dist and
-  // reverse indefinitely. We will fix this
-  // in Week 9.
+  int val = pwmVal(speed);
 
   // LF = Left forward pin, LR = Left reverse pin
   // RF = Right forward pin, RR = Right reverse pin
@@ -391,11 +387,12 @@ void left(float ang, float speed)
 {
   dir = LEFT;
 
-//  if(dist)
-//    deltaDist = ((float)ang/360) * (pi*r^2)
-//  else deltDist = 9999999;
+  if (ang)
+    deltaDist = (unsigned long)((float)ang / 360 * 2 * 3.14 * RADIUS);
+  else deltaDist = 9999999;
 
- // newDist
+  newDist = leftDist + deltaDist;
+
   int val = pwmVal(speed);
 
   // For now we will ignore ang. We will fix this in Week 9.
@@ -416,6 +413,13 @@ void left(float ang, float speed)
 void right(float ang, float speed)
 {
   dir = RIGHT;
+
+  if (ang)
+    deltaDist = (unsigned long)((float)ang / 360 * 2 * 3.14 * RADIUS);
+  else deltaDist = 9999999;
+
+  newDist = rightDist + deltaDist;
+  
   int val = pwmVal(speed);
 
   // For now we will ignore ang. We will fix this in Week 9.
@@ -495,7 +499,7 @@ void handleCommand(TPacket *command)
       sendOK();
       right((float) command->params[0], (float) command->params[1]);
       break;
-      
+
     case COMMAND_STOP:
       sendOK();
       stop();
@@ -504,7 +508,7 @@ void handleCommand(TPacket *command)
     case COMMAND_GET_STATS:
       sendStatus();
       break;
-      
+
     case COMMAND_CLEAR_STATS:
       clearOneCounter(command->params[0]);
       sendOK();
@@ -593,59 +597,71 @@ void loop() {
 
   //reverse(10,50);
 
-//  if (leftFlag) {
-//    Serial.println("Left");
-//    Serial.println(lfT);
-//    Serial.println(forwardDist);
-//    leftFlag = 0;
-//  }
-//
-//  if (rightFlag) {   
-//    Serial.println("Right");
-//    Serial.println(rfT); 
-//    Serial.println(forwardDist);
-//    rightFlag = 0;
-//  }
+  //  if (leftFlag) {
+  //    Serial.println("Left");
+  //    Serial.println(lfT);
+  //    Serial.println(forwardDist);
+  //    leftFlag = 0;
+  //  }
+  //
+  //  if (rightFlag) {
+  //    Serial.println("Right");
+  //    Serial.println(rfT);
+  //    Serial.println(forwardDist);
+  //    rightFlag = 0;
+  //  }
 
   // Uncomment the code below for Week 9 Studio 2
 
-    // put your main code here, to run repeatedly:
-    TPacket recvPacket; // This holds commands from the Pi
+  // put your main code here, to run repeatedly:
+  TPacket recvPacket; // This holds commands from the Pi
 
-    TResult result = readPacket(&recvPacket);
+  TResult result = readPacket(&recvPacket);
 
-    if(result == PACKET_OK)
-      handlePacket(&recvPacket);
-    else
-      if(result == PACKET_BAD)
-      {
-        sendBadPacket();
-      }
-      else
-        if(result == PACKET_CHECKSUM_BAD)
-        {
-          sendBadChecksum();
-        }
+  if (result == PACKET_OK)
+    handlePacket(&recvPacket);
+  else if (result == PACKET_BAD)
+  {
+    sendBadPacket();
+  }
+  else if (result == PACKET_CHECKSUM_BAD)
+  {
+    sendBadChecksum();
+  }
 
-  if(deltaDist > 0) {
-    if(dir == FORWARD) {
-      if(forwardDist > newDist) {
+  if (deltaDist > 0) {
+    if (dir == FORWARD) {
+      if (forwardDist > newDist) {
         deltaDist = 0;
         newDist = 0;
         stop();
       }
     }
-    else if(dir == REVERSE) {
-      if(reverseDist > newDist) {
+    else if (dir == REVERSE) {
+      if (reverseDist > newDist) {
         deltaDist = 0;
         newDist = 0;
         stop();
       }
     }
-    else if(dir == STOP){
+    else if (dir == LEFT) {
+      if (leftDist > newDist) {
         deltaDist = 0;
         newDist = 0;
         stop();
+      }
+    }
+    else if (dir == RIGHT) {
+      if (rightDist > newDist) {
+        deltaDist = 0;
+        newDist = 0;
+        stop();
+      }
+    }
+    else if (dir == STOP) {
+      deltaDist = 0;
+      newDist = 0;
+      stop();
     }
   }
 }

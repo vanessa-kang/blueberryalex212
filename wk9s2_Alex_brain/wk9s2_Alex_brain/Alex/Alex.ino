@@ -1,6 +1,7 @@
 #include "serialize.h"
 #include "packet.h"
 #include "constants.h"
+#include <stdarg.h>
 
 typedef enum
 {
@@ -29,7 +30,7 @@ volatile TDirection dir = STOP;
 #define WHEEL_CIRC          21
 
 // Turning radius of Alex, for turns
-#define RADIUS              10
+#define RADIUS              4
 
 // Motor control pins. You need to adjust these till
 // Alex moves in the correct direction
@@ -111,6 +112,8 @@ void sendStatus() {
   statusPacket.params[7] = rrTTurn;
   statusPacket.params[8] = forwardDist;
   statusPacket.params[9] = reverseDist;
+  statusPacket.params[10] = leftDist;
+  statusPacket.params[11] = rightDist;
 
   sendResponse(&statusPacket);
 }
@@ -123,6 +126,14 @@ void sendMessage(const char *message) {
   messagePacket.packetType = PACKET_TYPE_MESSAGE;
   strncpy(messagePacket.data, message, MAX_STR_LEN);
   sendResponse(&messagePacket);
+}
+
+void dbprint(char *format, ...) {
+  va_list args;
+  char buffer[128];
+  va_start(args, format);
+  vsprintf(buffer, format, args);
+  sendMessage(buffer);
 }
 
 void sendBadPacket() {
@@ -198,10 +209,10 @@ void enablePullups() {
 // Functions to be called by INT0 and INT1 ISRs.
 void leftISR() {
   switch (dir) {
-    case FORWARD: lfT++; forwardDist = (unsigned long) ((float) lfT / COUNTS_PER_REV * WHEEL_CIRC);break;
-    case REVERSE: lrT++; reverseDist = (unsigned long) ((float) lrT / COUNTS_PER_REV * WHEEL_CIRC);break;
-    case LEFT: lrTTurn++; leftDist = (unsigned long) ((float) lrTTurn / COUNTS_PER_REV * WHEEL_CIRC);break;
-    case RIGHT: lfTTurn++; rightDist = (unsigned long) ((float) lrT / COUNTS_PER_REV * WHEEL_CIRC);break;
+    case FORWARD: lfT++; forwardDist = (unsigned long) ((float) lfT / COUNTS_PER_REV * WHEEL_CIRC); break;
+    case REVERSE: lrT++; reverseDist = (unsigned long) ((float) lrT / COUNTS_PER_REV * WHEEL_CIRC); break;
+    case LEFT: lrTTurn++; leftDist = (unsigned long) ((float) lrTTurn / COUNTS_PER_REV * WHEEL_CIRC); break;
+    case RIGHT: lfTTurn++; rightDist = (unsigned long) ((float) lrT / COUNTS_PER_REV * WHEEL_CIRC); break;
   }
 }
 
@@ -388,7 +399,7 @@ void left(float ang, float speed)
   dir = LEFT;
 
   if (ang)
-    deltaDist = (unsigned long)((float)ang / 360 * 2 * 3.14 * RADIUS);
+    deltaDist = (unsigned long)((float)ang / 360 * 2 * 3.1415 * RADIUS);
   else deltaDist = 9999999;
 
   newDist = leftDist + deltaDist;
@@ -415,11 +426,11 @@ void right(float ang, float speed)
   dir = RIGHT;
 
   if (ang)
-    deltaDist = (unsigned long)((float)ang / 360 * 2 * 3.14 * RADIUS);
+    deltaDist = (unsigned long)((float)ang / 360 * 2 * 3.1415 * RADIUS);
   else deltaDist = 9999999;
 
   newDist = rightDist + deltaDist;
-  
+
   int val = pwmVal(speed);
 
   // For now we will ignore ang. We will fix this in Week 9.

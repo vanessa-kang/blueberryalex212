@@ -212,7 +212,7 @@ void leftISR() {
     case FORWARD: lfT++; forwardDist = (unsigned long) ((float) lfT / COUNTS_PER_REV * WHEEL_CIRC); break;
     case REVERSE: lrT++; reverseDist = (unsigned long) ((float) lrT / COUNTS_PER_REV * WHEEL_CIRC); break;
     case LEFT: lrTTurn++; leftDist = (unsigned long) ((float) lrTTurn / COUNTS_PER_REV * WHEEL_CIRC); break;
-    case RIGHT: lfTTurn++; rightDist = (unsigned long) ((float) lrT / COUNTS_PER_REV * WHEEL_CIRC); break;
+    case RIGHT: lfTTurn++; rightDist = (unsigned long) ((float) lfTTurn / COUNTS_PER_REV * WHEEL_CIRC); break;
   }
 }
 
@@ -606,7 +606,8 @@ void loop() {
   //
   //forward(0, 100);
 
-  //reverse(10,50);
+//  reverse(10,50);
+//  delay(10000);
 
   //  if (leftFlag) {
   //    Serial.println("Left");
@@ -624,7 +625,11 @@ void loop() {
 
   // Uncomment the code below for Week 9 Studio 2
 
-  // put your main code here, to run repeatedly:
+
+//  analogWrite(LR, 100);
+//  analogWrite(RR, 100);
+  
+  
   TPacket recvPacket; // This holds commands from the Pi
 
   TResult result = readPacket(&recvPacket);

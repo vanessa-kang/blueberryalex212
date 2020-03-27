@@ -30,7 +30,7 @@ volatile TDirection dir = STOP;
 #define WHEEL_CIRC          21
 
 // Turning radius of Alex, for turns
-#define RADIUS              4
+#define RADIUS              5.5
 
 // Motor control pins. You need to adjust these till
 // Alex moves in the correct direction
@@ -628,8 +628,14 @@ void loop() {
 
 //  analogWrite(LR, 100);
 //  analogWrite(RR, 100);
-  
-  
+//  delay(2000);
+//  analogWrite(LR, 0);
+//  analogWrite(RR, 0);
+//  delay(2000);
+  //analogWrite(LF, 50);
+  //analogWrite(RF, 50);
+
+
   TPacket recvPacket; // This holds commands from the Pi
 
   TResult result = readPacket(&recvPacket);
@@ -680,4 +686,5 @@ void loop() {
       stop();
     }
   }
+
 }

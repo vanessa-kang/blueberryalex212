@@ -8,8 +8,8 @@
 #include "serialize.h"
 #include "constants.h"
 
-//#define PORT_NAME			"/dev/ttyACM0"
-#define PORT_NAME			"/dev/ttyACM1"
+#define PORT_NAME			"/dev/ttyACM0"
+//#define PORT_NAME			"/dev/ttyACM1"
 #define BAUD_RATE			B9600
 
 int exitFlag=0;
@@ -185,7 +185,7 @@ void sendCommand(char command)
 	{
 		case 'f':
 		case 'F':
-			getParams(&commandPacket);
+			getParams (&commandPacket);
 			commandPacket.command = COMMAND_FORWARD;
 			sendPacket(&commandPacket);
 			break;
@@ -270,7 +270,6 @@ int main()
 
 		// Purge extraneous characters from input stream
 		flushInput();
-
 		sendCommand(ch);
 	}
 

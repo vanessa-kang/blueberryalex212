@@ -7,12 +7,14 @@
 #include "serial.h"
 #include "serialize.h"
 #include "constants.h"
+#include <ncurses.h>
 
 #define PORT_NAME			"/dev/ttyACM0"
 //#define PORT_NAME			"/dev/ttyACM1"
 #define BAUD_RATE			B9600
 
 int exitFlag=0;
+int recvOk = 0;
 sem_t _xmitSema;
 
 void handleError(TResult error)
@@ -61,6 +63,11 @@ void handleResponse(TPacket *packet)
 
 		case RESP_STATUS:
 			handleStatus(packet);
+		break;
+		
+		case RESP_FINISH:
+			printf("Command Finished\n");
+			recvOk = 1;
 		break;
 
 		default:
@@ -167,12 +174,21 @@ void flushInput()
 	while((c = getchar()) != '\n' && c != EOF);
 }
 
-void getParams(TPacket *commandPacket)
+void getParams(TPacket *commandPacket, char ch)
 {
-	printf("Enter distance/angle in cm/degrees (e.g. 50) and power in %% (e.g. 75) separated by space.\n");
-	printf("E.g. 50 75 means go at 50 cm at 75%% power for forward/backward, or 50 degrees left or right turn at 75%%  power\n");
-	scanf("%d %d", &commandPacket->params[0], &commandPacket->params[1]);
-	flushInput();
+	//printf("Enter distance/angle in cm/degrees (e.g. 50) and power in %% (e.g. 75) separated by space.\n");
+	//printf("E.g. 50 75 means go at 50 cm at 75%% power for forward/backward, or 50 degrees left or right turn at 75%%  power\n");
+	//scanf("%d %d", &commandPacket->params[0], &commandPacket->params[1]);
+	//flushInput();
+	//printf("Sending commands\n");
+	if(ch == 'w' || ch == 's') {
+		commandPacket->params[0] = 5;
+		commandPacket->params[1] = 85;
+	}
+	else {
+		commandPacket->params[0] = 15;
+		commandPacket->params[1] = 90;
+	}
 }
 
 void sendCommand(char command)
@@ -183,36 +199,41 @@ void sendCommand(char command)
 
 	switch(command)
 	{
-		case 'f':
-		case 'F':
-			getParams (&commandPacket);
+		case 'w':
+		case 'W':
+			printf("Forward\n");
+			getParams (&commandPacket, 'w');
 			commandPacket.command = COMMAND_FORWARD;
-			sendPacket(&commandPacket);
-			break;
-
-		case 'b':
-		case 'B':
-			getParams(&commandPacket);
-			commandPacket.command = COMMAND_REVERSE;
-			sendPacket(&commandPacket);
-			break;
-
-		case 'l':
-		case 'L':
-			getParams(&commandPacket);
-			commandPacket.command = COMMAND_TURN_LEFT;
-			sendPacket(&commandPacket);
-			break;
-
-		case 'r':
-		case 'R':
-			getParams(&commandPacket);
-			commandPacket.command = COMMAND_TURN_RIGHT;
 			sendPacket(&commandPacket);
 			break;
 
 		case 's':
 		case 'S':
+			printf("Reverse\n");
+			getParams(&commandPacket, 's');
+			commandPacket.command = COMMAND_REVERSE;
+			sendPacket(&commandPacket);
+			break;
+
+		case 'a':
+		case 'A':
+			printf("Left\n");
+			getParams(&commandPacket, 'a');
+			commandPacket.command = COMMAND_TURN_LEFT;
+			sendPacket(&commandPacket);
+			break;
+
+		case 'd':
+		case 'D':
+			printf("Right\n");
+			getParams(&commandPacket, 'd');
+			commandPacket.command = COMMAND_TURN_RIGHT;
+			sendPacket(&commandPacket);
+			break;
+
+		case 'x':
+		case 'X':
+			printf("Stop\n");
 			commandPacket.command = COMMAND_STOP;
 			sendPacket(&commandPacket);
 			break;
@@ -243,6 +264,12 @@ void sendCommand(char command)
 
 int main()
 {
+	char ch;
+	
+	
+	initscr();
+	cbreak();
+	noecho();
 	// Connect to the Arduino
 	startSerial(PORT_NAME, BAUD_RATE, 8, 'N', 1, 5);
 
@@ -264,15 +291,20 @@ int main()
 
 	while(!exitFlag)
 	{
-		char ch;
-		printf("Command (f=forward, b=reverse, l=turn left, r=turn right, s=stop, c=clear stats, g=get stats q=exit)\n");
-		scanf("%c", &ch);
-
+		recvOk = 0;
+		//printf("Command (w=forward, s=reverse, a=turn left, d=turn right, x=stop, c=clear stats, g=get stats q=exit)\n");
+		ch = getch();
+		//printf("%c/n", ch);
+		//while((ch = getch()) != 'f'){
 		// Purge extraneous characters from input stream
-		flushInput();
+		//printf("%c/n", ch);
+		//}
+		//flushInput();
 		sendCommand(ch);
+		while(recvOk == 0 && getch() != 'x');
 	}
 
 	printf("Closing connection to Arduino.\n");
 	endSerial();
+	//endwin();
 }

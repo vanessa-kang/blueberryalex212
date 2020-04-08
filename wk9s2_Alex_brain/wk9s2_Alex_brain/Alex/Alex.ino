@@ -74,6 +74,8 @@ unsigned long newDist;
 static volatile int leftFlag = 0;
 static volatile int rightFlag = 0;
 
+unsigned long startTime = 0, endTime = 0;
+
 /*
 
    Alex Communication Routines.
@@ -179,6 +181,13 @@ void sendOK() {
   TPacket okPacket;
   okPacket.packetType = PACKET_TYPE_RESPONSE;
   okPacket.command = RESP_OK;
+  sendResponse(&okPacket);
+}
+
+void sendFinish() {
+  TPacket okPacket;
+  okPacket.packetType = PACKET_TYPE_RESPONSE;
+  okPacket.command = RESP_FINISH;
   sendResponse(&okPacket);
 }
 
@@ -606,7 +615,7 @@ void loop() {
   //
   //forward(0, 100);
 
-//  reverse(10,50);
+  //reverse(10,50);
 //  delay(10000);
 
   //  if (leftFlag) {
@@ -634,14 +643,16 @@ void loop() {
 //  delay(2000);
   //analogWrite(LF, 50);
   //analogWrite(RF, 50);
-
-
+//
+//
   TPacket recvPacket; // This holds commands from the Pi
 
   TResult result = readPacket(&recvPacket);
 
-  if (result == PACKET_OK)
+  if (result == PACKET_OK) {
     handlePacket(&recvPacket);
+    startTime = millis();
+  }
   else if (result == PACKET_BAD)
   {
     sendBadPacket();
@@ -650,40 +661,50 @@ void loop() {
   {
     sendBadChecksum();
   }
-
+  
+  endTime = millis();
+  if((endTime - startTime) > 1000) {
+    startTime = 0;
+    endTime = 0;
+    stop();
+  }
+  
   if (deltaDist > 0) {
     if (dir == FORWARD) {
       if (forwardDist > newDist) {
         deltaDist = 0;
         newDist = 0;
-        stop();
+        sendFinish();
       }
     }
     else if (dir == REVERSE) {
       if (reverseDist > newDist) {
         deltaDist = 0;
         newDist = 0;
-        stop();
+        sendFinish();
       }
     }
     else if (dir == LEFT) {
       if (leftDist > newDist) {
         deltaDist = 0;
         newDist = 0;
-        stop();
+        sendFinish();
       }
     }
     else if (dir == RIGHT) {
       if (rightDist > newDist) {
         deltaDist = 0;
         newDist = 0;
-        stop();
+        sendFinish();
       }
     }
     else if (dir == STOP) {
       deltaDist = 0;
       newDist = 0;
+      startTime = 0;
+      endTime = 0;
       stop();
+      sendFinish();
     }
   }
 

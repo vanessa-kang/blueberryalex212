@@ -39,6 +39,17 @@ volatile TDirection dir = STOP;
 #define RF                  11  // Right forward pin
 #define RR                  10  // Right reverse pin
 
+// Constants for PID
+#define IDEAL_SPEED         10  //Roughly 195 counts (1 rev) per 2 seconds
+#define BASE_POWER          125 //Starting power level
+#define PID_INTERVAL        100 //Period between each PID value update
+#define TURNING_DIV         1.75  //Divide by this constant for turns to prevent turning too fast
+
+//P,I and D coefficients
+#define kp                  4
+#define ki                  1
+#define kd                  3
+
 /*
       Alex's State Variables
 */
@@ -47,34 +58,14 @@ volatile TDirection dir = STOP;
 // right encoders.
 volatile unsigned long lfT;
 volatile unsigned long rfT;
-volatile unsigned long lrT;
-volatile unsigned long rrT;
 
-//Left and right encoder ticks for turning
-volatile unsigned long lfTTurn;
-volatile unsigned long rfTTurn;
-volatile unsigned long lrTTurn;
-volatile unsigned long rrTTurn;
-
-// Store the revolutions on Alex's left
-// and right wheels
-volatile unsigned long leftRevs;
-volatile unsigned long rightRevs;
-
-// Forward and backward distance traveled
-volatile unsigned long forwardDist;
-volatile unsigned long reverseDist;
-volatile unsigned long leftDist;
-volatile unsigned long rightDist;
-
-//Keep track of whether we have moved a commanded distance
-unsigned long deltaDist;
-unsigned long newDist;
-
-static volatile int leftFlag = 0;
-static volatile int rightFlag = 0;
-
-unsigned long startTime = 0, endTime = 0;
+//Variables for PID
+int pidpwr = 150, pidpwrR = 150;
+unsigned long startFlag = 0, startFlagR = 0;
+float startPID = 0, totalTime = 0, startPIDR = 0, totalTimeR = 0;
+int startlfT = 0, totallfT = 0, intervalError = 0, lastError = 0, deltaError = 0, totalError = 0;
+int startrfT = 0, totalrfT = 0, intervalErrorR = 0, lastErrorR = 0, deltaErrorR = 0, totalErrorR = 0;
+int clearFlag = 0, clearFlagR = 0;
 
 /*
 
@@ -106,17 +97,6 @@ void sendStatus() {
 
   statusPacket.params[0] = lfT;
   statusPacket.params[1] = rfT;
-  statusPacket.params[2] = lrT;
-  statusPacket.params[3] = rrT;
-  statusPacket.params[4] = lfTTurn;
-  statusPacket.params[5] = rfTTurn;
-  statusPacket.params[6] = lrTTurn;
-  statusPacket.params[7] = rrTTurn;
-  statusPacket.params[8] = forwardDist;
-  statusPacket.params[9] = reverseDist;
-  statusPacket.params[10] = leftDist;
-  statusPacket.params[11] = rightDist;
-
   sendResponse(&statusPacket);
 }
 
@@ -217,22 +197,11 @@ void enablePullups() {
 
 // Functions to be called by INT0 and INT1 ISRs.
 void leftISR() {
-  switch (dir) {
-    case FORWARD: lfT++; forwardDist = (unsigned long) ((float) lfT / COUNTS_PER_REV * WHEEL_CIRC); break;
-    case REVERSE: lrT++; reverseDist = (unsigned long) ((float) lrT / COUNTS_PER_REV * WHEEL_CIRC); break;
-    case LEFT: lrTTurn++; leftDist = (unsigned long) ((float) lrTTurn / COUNTS_PER_REV * WHEEL_CIRC); break;
-    case RIGHT: lfTTurn++; rightDist = (unsigned long) ((float) lfTTurn / COUNTS_PER_REV * WHEEL_CIRC); break;
-  }
+  lfT++;
 }
 
 void rightISR() {
-  switch (dir) {
-    case FORWARD: rfT++; break;
-    case REVERSE: rrT++; break;
-    case LEFT: rfTTurn++; break;
-    case RIGHT: rrTTurn++; break;
-  }
-
+  rfT++;
 }
 
 // Set up the external interrupt pins INT0 and INT1
@@ -331,42 +300,17 @@ void startMotors()
 
 }
 
-// Convert percentages to PWM values
-int pwmVal(float speed)
-{
-  if (speed < 0.0)
-    speed = 0;
-
-  if (speed > 100.0)
-    speed = 100.0;
-
-  return (int) ((speed / 100.0) * 255.0);
-}
-
 // Move Alex forward "dist" cm at speed "speed".
 // "speed" is expressed as a percentage. E.g. 50 is
 // move forward at half speed.
 // Specifying a distance of 0 means Alex will
 // continue moving forward indefinitely.
-void forward(float dist, float speed)
+void forward()
 {
-  dir = FORWARD;
-
-  if (dist)
-    deltaDist = dist;
-  else
-    deltaDist = 99999999;
-
-  newDist = forwardDist + deltaDist;
-
-  int val = pwmVal(speed);
-
-  // LF = Left forward pin, LR = Left reverse pin
-  // RF = Right forward pin, RR = Right reverse pin
-  // This will be replaced later with bare-metal code.
-
-  analogWrite(LF, val);
-  analogWrite(RF, val);
+  leftpid();
+  rightpid();
+  analogWrite(LF, pidpwr);
+  analogWrite(RF, pidpwrR);
   analogWrite(LR, 0);
   analogWrite(RR, 0);
 }
@@ -376,24 +320,12 @@ void forward(float dist, float speed)
 // reverse at half speed.
 // Specifying a distance of 0 means Alex will
 // continue reversing indefinitely.
-void reverse(float dist, float speed)
+void reverse()
 {
-  dir = REVERSE;
-
-  if (dist)
-    deltaDist = dist;
-  else
-    deltaDist = 99999999;
-
-  newDist = reverseDist + deltaDist;
-
-  int val = pwmVal(speed);
-
-  // LF = Left forward pin, LR = Left reverse pin
-  // RF = Right forward pin, RR = Right reverse pin
-  // This will be replaced later with bare-metal code.
-  analogWrite(LR, val);
-  analogWrite(RR, val);
+  leftpid();
+  rightpid();
+  analogWrite(LR, pidpwr);
+  analogWrite(RR, pidpwrR);
   analogWrite(LF, 0);
   analogWrite(RF, 0);
 }
@@ -403,24 +335,14 @@ void reverse(float dist, float speed)
 // turn left at half speed.
 // Specifying an angle of 0 degrees will cause Alex to
 // turn left indefinitely.
-void left(float ang, float speed)
+void left()
 {
-  dir = LEFT;
-
-  if (ang)
-    deltaDist = (unsigned long)((float)ang / 360 * 2 * 3.1415 * RADIUS);
-  else deltaDist = 9999999;
-
-  newDist = leftDist + deltaDist;
-
-  int val = pwmVal(speed);
-
-  // For now we will ignore ang. We will fix this in Week 9.
-  // We will also replace this code with bare-metal later.
-  // To turn left we reverse the left wheel and move
-  // the right wheel forward.
-  analogWrite(LR, val);
-  analogWrite(RF, val);
+  leftpid();
+  rightpid();
+  int pidpwrTurn = pidpwr / TURNING_DIV;
+  int pidpwrTurnR = pidpwrR / TURNING_DIV;
+  analogWrite(LR, pidpwrTurn);
+  analogWrite(RF, pidpwrTurnR);
   analogWrite(LF, 0);
   analogWrite(RR, 0);
 }
@@ -430,24 +352,14 @@ void left(float ang, float speed)
 // turn left at half speed.
 // Specifying an angle of 0 degrees will cause Alex to
 // turn right indefinitely.
-void right(float ang, float speed)
-{
-  dir = RIGHT;
-
-  if (ang)
-    deltaDist = (unsigned long)((float)ang / 360 * 2 * 3.1415 * RADIUS);
-  else deltaDist = 9999999;
-
-  newDist = rightDist + deltaDist;
-
-  int val = pwmVal(speed);
-
-  // For now we will ignore ang. We will fix this in Week 9.
-  // We will also replace this code with bare-metal later.
-  // To turn right we reverse the right wheel and move
-  // the left wheel forward.
-  analogWrite(RR, val);
-  analogWrite(LF, val);
+void right()
+{  
+  leftpid();
+  rightpid();
+  int pidpwrTurn = pidpwr / TURNING_DIV;
+  int pidpwrTurnR = pidpwrR / TURNING_DIV;
+  analogWrite(LF, pidpwrTurn);
+  analogWrite(RR, pidpwrTurnR);
   analogWrite(LR, 0);
   analogWrite(RF, 0);
 }
@@ -455,13 +367,82 @@ void right(float ang, float speed)
 // Stop Alex. To replace with bare-metal code later.
 void stop()
 {
-  dir = STOP;
   analogWrite(LF, 0);
   analogWrite(LR, 0);
   analogWrite(RF, 0);
   analogWrite(RR, 0);
 }
 
+void leftpid()
+{
+  if(clearFlag == 1) {
+    totalError = 0;
+    lastError = 0;
+    clearFlag = 0;
+  }
+  if(startFlag == 0) {
+    startPID = millis();
+    startlfT = lfT;
+    startFlag = 1;
+  }
+  totalTime = millis() - startPID;
+
+  if(totalTime > PID_INTERVAL) {
+    startFlag = 0;
+    totallfT = (lfT - startlfT);
+    
+    /* Positive error = too slow; negative error = too fast */
+    intervalError = IDEAL_SPEED - totallfT;
+    totalError += intervalError;
+    deltaError = intervalError - lastError;
+    
+    pidpwr = BASE_POWER + kp*intervalError + ki*totalError + kd*deltaError;
+    if(pidpwr > 255) pidpwr = 255;
+    else if (pidpwr <0) pidpwr = 0;
+
+    lastError = intervalError;
+  }
+  
+}
+
+void rightpid()
+{
+  if(clearFlagR == 1) {
+    totalErrorR = 0;
+    lastErrorR = 0;
+    clearFlagR = 0;
+  }
+  if(startFlagR == 0) {
+    startPIDR = millis();
+    startrfT = rfT;
+    startFlagR = 1;
+  }
+  totalTimeR = millis() - startPIDR;
+
+  if(totalTimeR > PID_INTERVAL) {
+    startFlagR = 0;
+    totalrfT = (rfT - startrfT);
+    
+    /* Positive error = too slow; negative error = too fast */
+    intervalErrorR = IDEAL_SPEED - totalrfT;
+    totalErrorR += intervalErrorR;
+    deltaErrorR = intervalErrorR - lastErrorR;
+    
+    pidpwrR = BASE_POWER + kp*intervalErrorR + ki*totalErrorR + kd*deltaErrorR;
+    if(pidpwrR > 255) pidpwrR = 255;
+    else if (pidpwrR <0) pidpwrR = 0;
+    
+    lastErrorR = intervalErrorR;
+
+//    Serial.print("Interval error: ");
+//    Serial.print(intervalErrorR);
+//    Serial.print(" // totalError: ");
+//    Serial.print(totalErrorR);
+//    Serial.print(" // pidpwrR: ");
+//    Serial.println(pidpwrR);
+  }
+  
+}
 /*
    Alex's setup and run codes
 
@@ -472,16 +453,6 @@ void clearCounters()
 {
   lfT = 0;
   rfT = 0;
-  lrT = 0;
-  rrT = 0;
-  lfTTurn = 0;
-  rfTTurn = 0;
-  lrTTurn = 0;
-  rrTTurn = 0;
-  leftRevs = 0;
-  rightRevs = 0;
-  forwardDist = 0;
-  reverseDist = 0;
 }
 
 // Clears one particular counter
@@ -503,26 +474,26 @@ void handleCommand(TPacket *command)
     // For movement commands, param[0] = distance, param[1] = speed.
     case COMMAND_FORWARD:
       sendOK();
-      forward((float) command->params[0], (float) command->params[1]);
+      dir = FORWARD;
       break;
     case COMMAND_REVERSE:
       sendOK();
-      reverse((float) command->params[0], (float) command->params[1]);
+      dir = REVERSE;
       break;
 
     case COMMAND_TURN_LEFT:
       sendOK();
-      left((float) command->params[0], (float) command->params[1]);
+      dir = LEFT;
       break;
 
     case COMMAND_TURN_RIGHT:
       sendOK();
-      right((float) command->params[0], (float) command->params[1]);
+      dir = RIGHT;
       break;
 
     case COMMAND_STOP:
       sendOK();
-      stop();
+      dir = STOP;
       break;
 
     case COMMAND_GET_STATS:
@@ -593,6 +564,8 @@ void handlePacket(TPacket *packet)
   {
     case PACKET_TYPE_COMMAND:
       handleCommand(packet);
+      clearFlag = 1;
+      clearFlagR = 1;
       break;
 
     case PACKET_TYPE_RESPONSE:
@@ -611,47 +584,18 @@ void handlePacket(TPacket *packet)
 
 void loop() {
 
-  // Uncomment the code below for Step 2 of Activity 3 in Week 8 Studio 2
-  //
-  //forward(0, 100);
+//  dir = FORWARD;
+//  Serial.println(lfT);
+//  Serial.println(rfT);
+//  delay(500);
 
-  //reverse(10,50);
-//  delay(10000);
-
-  //  if (leftFlag) {
-  //    Serial.println("Left");
-  //    Serial.println(lfT);
-  //    Serial.println(forwardDist);
-  //    leftFlag = 0;
-  //  }
-  //
-  //  if (rightFlag) {
-  //    Serial.println("Right");
-  //    Serial.println(rfT);
-  //    Serial.println(forwardDist);
-  //    rightFlag = 0;
-  //  }
-
-  // Uncomment the code below for Week 9 Studio 2
-
-
-//  analogWrite(LR, 100);
-//  analogWrite(RR, 100);
-//  delay(2000);
-//  analogWrite(LR, 0);
-//  analogWrite(RR, 0);
-//  delay(2000);
-  //analogWrite(LF, 50);
-  //analogWrite(RF, 50);
-//
-//
+      
   TPacket recvPacket; // This holds commands from the Pi
 
   TResult result = readPacket(&recvPacket);
 
   if (result == PACKET_OK) {
     handlePacket(&recvPacket);
-    startTime = millis();
   }
   else if (result == PACKET_BAD)
   {
@@ -661,55 +605,20 @@ void loop() {
   {
     sendBadChecksum();
   }
-  
-//  endTime = millis();
-//  if((endTime - startTime) > 1000) {
-//    startTime = 0;
-//    endTime = 0;
-//    stop();
-//  }
-  
-  if (deltaDist > 0) {
-    if (dir == FORWARD) {
-      if (forwardDist > newDist) {
-        deltaDist = 0;
-        newDist = 0;
-        stop();
-        sendFinish();
-      }
-    }
-    else if (dir == REVERSE) {
-      if (reverseDist > newDist) {
-        deltaDist = 0;
-        newDist = 0;
-        stop();
-        sendFinish();
-      }
-    }
-    else if (dir == LEFT) {
-      if (leftDist > newDist) {
-        deltaDist = 0;
-        newDist = 0;
-        stop();
-        sendFinish();
-      }
-    }
-    else if (dir == RIGHT) {
-      if (rightDist > newDist) {
-        deltaDist = 0;
-        newDist = 0;
-        stop();
-        sendFinish();
-      }
-    }
-    else if (dir == STOP) {
-      deltaDist = 0;
-      newDist = 0;
-      startTime = 0;
-      endTime = 0;
-      stop();
-      sendFinish();
-    }
+
+  if(dir == FORWARD) {
+    forward();
   }
+  else if(dir == REVERSE) {
+    reverse();
+  }
+  else if(dir == LEFT) {
+    left();
+  }
+  else if(dir == RIGHT) {
+    right();
+  }
+  else stop();
+
 
 }

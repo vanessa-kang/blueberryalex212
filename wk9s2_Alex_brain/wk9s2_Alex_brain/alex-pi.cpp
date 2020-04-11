@@ -10,7 +10,7 @@
 #include <ncurses.h>
 
 #define PORT_NAME			"/dev/ttyACM0"
-//#define PORT_NAME			"/dev/ttyACM1"
+//define PORT_NAME			"/dev/ttyACM1"
 #define BAUD_RATE			B9600
 
 int exitFlag=0;
@@ -22,34 +22,24 @@ void handleError(TResult error)
 	switch(error)
 	{
 		case PACKET_BAD:
-			printf("ERROR: Bad Magic Number\n");
+			printw("ERROR: Bad Magic Number\n");
 			break;
 
 		case PACKET_CHECKSUM_BAD:
-			printf("ERROR: Bad checksum\n");
+			printw("ERROR: Bad checksum\n");
 			break;
 
 		default:
-			printf("ERROR: UNKNOWN ERROR\n");
+			printw("ERROR: UNKNOWN ERROR\n");
 	}
 }
 
 void handleStatus(TPacket *packet)
 {
-	printf("\n ------- ALEX STATUS REPORT ------- \n\n");
-	printf("Left Forward Ticks:\t\t%d\n", packet->params[0]);
-	printf("Right Forward Ticks:\t\t%d\n", packet->params[1]);
-	printf("Left Reverse Ticks:\t\t%d\n", packet->params[2]);
-	printf("Right Reverse Ticks:\t\t%d\n", packet->params[3]);
-	printf("Left Forward Ticks Turns:\t%d\n", packet->params[4]);
-	printf("Right Forward Ticks Turns:\t%d\n", packet->params[5]);
-	printf("Left Reverse Ticks Turns:\t%d\n", packet->params[6]);
-	printf("Right Reverse Ticks Turns:\t%d\n", packet->params[7]);
-	printf("Forward Distance:\t\t%d\n", packet->params[8]);
-	printf("Reverse Distance:\t\t%d\n", packet->params[9]);
-	printf("Left Distance:\t\t%d\n", packet->params[10]);
-	printf("Right Distance:\t\t%d\n", packet->params[11]);
-	printf("\n---------------------------------------\n\n");
+	printw("\n ------- ALEX STATUS REPORT ------- \n\n");
+	printw("Left Ticks:\t\t%d\n", packet->params[0]);
+	printw("Right Ticks:\t\t%d\n", packet->params[1]);
+	printw("\n---------------------------------------\n\n");
 }
 
 void handleResponse(TPacket *packet)
@@ -58,7 +48,7 @@ void handleResponse(TPacket *packet)
 	switch(packet->command)
 	{
 		case RESP_OK:
-			printf("Command OK\n");
+			printw("Command OK\n");
 		break;
 
 		case RESP_STATUS:
@@ -66,12 +56,12 @@ void handleResponse(TPacket *packet)
 		break;
 		
 		case RESP_FINISH:
-			printf("Command Finished\n");
+			printw("Command Finished\n");
 			recvOk = 1;
 		break;
 
 		default:
-			printf("Arduino is confused\n");
+			printw("Arduino is confused\n");
 	}
 }
 
@@ -81,29 +71,29 @@ void handleErrorResponse(TPacket *packet)
 	switch(packet->command)
 	{
 		case RESP_BAD_PACKET:
-			printf("Arduino received bad magic number\n");
+			printw("Arduino received bad magic number\n");
 		break;
 
 		case RESP_BAD_CHECKSUM:
-			printf("Arduino received bad checksum\n");
+			printw("Arduino received bad checksum\n");
 		break;
 
 		case RESP_BAD_COMMAND:
-			printf("Arduino received bad command\n");
+			printw("Arduino received bad command\n");
 		break;
 
 		case RESP_BAD_RESPONSE:
-			printf("Arduino received unexpected response\n");
+			printw("Arduino received unexpected response\n");
 		break;
 
 		default:
-			printf("Arduino reports a weird error\n");
+			printw("Arduino reports a weird error\n");
 	}
 }
 
 void handleMessage(TPacket *packet)
 {
-	printf("Message from Alex: %s\n", packet->data);
+	printw("Message from Alex: %s\n", packet->data);
 }
 
 void handlePacket(TPacket *packet)
@@ -160,36 +150,31 @@ void *receiveThread(void *p)
 			else 
 				if(result != PACKET_INCOMPLETE)
 				{
-					printf("PACKET ERROR\n");
+					printw("PACKET ERROR\n");
 					handleError(result);
 				}
 		}
 	}
 }
 
-void flushInput()
-{
-	char c;
+//void flushInput()
+//{
+	//char c;
 
-	while((c = getchar()) != '\n' && c != EOF);
-}
+	//while((c = getchar()) != '\n' && c != EOF);
+//}
 
-void getParams(TPacket *commandPacket, char ch)
-{
-	//printf("Enter distance/angle in cm/degrees (e.g. 50) and power in %% (e.g. 75) separated by space.\n");
-	//printf("E.g. 50 75 means go at 50 cm at 75%% power for forward/backward, or 50 degrees left or right turn at 75%%  power\n");
-	//scanf("%d %d", &commandPacket->params[0], &commandPacket->params[1]);
-	//flushInput();
-	//printf("Sending commands\n");
-	if(ch == 'w' || ch == 's') {
-		commandPacket->params[0] = 5;
-		commandPacket->params[1] = 55;
-	}
-	else {
-		commandPacket->params[0] = 15;
-		commandPacket->params[1] = 50;
-	}
-}
+//void getParams(TPacket *commandPacket, char ch)
+//{
+	//if(ch == 'w' || ch == 's') {
+		//commandPacket->params[0] = 5;
+		//commandPacket->params[1] = 55;
+	//}
+	//else {
+		//commandPacket->params[0] = 15;
+		//commandPacket->params[1] = 50;
+	//}
+//}
 
 void sendCommand(char command)
 {
@@ -201,39 +186,35 @@ void sendCommand(char command)
 	{
 		case 'w':
 		case 'W':
-			printf("Forward\n");
-			getParams (&commandPacket, 'w');
+			printw("Forward\n");
 			commandPacket.command = COMMAND_FORWARD;
 			sendPacket(&commandPacket);
 			break;
 
 		case 's':
 		case 'S':
-			printf("Reverse\n");
-			getParams(&commandPacket, 's');
+			printw("Reverse\n");
 			commandPacket.command = COMMAND_REVERSE;
 			sendPacket(&commandPacket);
 			break;
 
 		case 'a':
 		case 'A':
-			printf("Left\n");
-			getParams(&commandPacket, 'a');
+			printw("Left\n");
 			commandPacket.command = COMMAND_TURN_LEFT;
 			sendPacket(&commandPacket);
 			break;
 
 		case 'd':
 		case 'D':
-			printf("Right\n");
-			getParams(&commandPacket, 'd');
+			printw("Right\n");
 			commandPacket.command = COMMAND_TURN_RIGHT;
 			sendPacket(&commandPacket);
 			break;
 
 		case 'x':
 		case 'X':
-			printf("Stop\n");
+			printw("Stop\n");
 			commandPacket.command = COMMAND_STOP;
 			sendPacket(&commandPacket);
 			break;
@@ -257,7 +238,7 @@ void sendCommand(char command)
 			break;
 
 		default:
-			printf("Bad command\n");
+			printw("Bad command\n");
 
 	}
 }
@@ -266,17 +247,19 @@ int main()
 {
 	char ch;
 	
+	//Ncurses initialization
+	initscr();	//Initialize the structures required
+	cbreak();	//No input buffering
+	noecho();	//Does not echo the entered chracter
+	scrollok(stdscr, TRUE);	//Automatically scrolls the window if exceed bottom
 	
-	initscr();
-	cbreak();
-	noecho();
 	// Connect to the Arduino
 	startSerial(PORT_NAME, BAUD_RATE, 8, 'N', 1, 5);
 
 	// Sleep for two seconds
-	printf("WAITING TWO SECONDS FOR ARDUINO TO REBOOT\n");
+	printw("WAITING TWO SECONDS FOR ARDUINO TO REBOOT\n");
 	sleep(2);
-	printf("DONE\n");
+	printw("DONE\n");
 
 	// Spawn receiver thread
 	pthread_t recv;
@@ -292,20 +275,14 @@ int main()
 	while(!exitFlag)
 	{
 		recvOk = 0;
-		//printf("Command (w=forward, s=reverse, a=turn left, d=turn right, x=stop, c=clear stats, g=get stats q=exit)\n");
 		ch = getch();
-		//printf("%c/n", ch);
-		//while((ch = getch()) != 'f'){
-		// Purge extraneous characters from input stream
-		//printf("%c/n", ch);
-		//}
-		//flushInput();
 		sendCommand(ch);
-		//while(recvOk == 0 && getch() != 'x');
 	}
 
-	printf("Closing connection to Arduino.\n");
+	printw("Closing connection to Arduino.\n");
 	endSerial();
+	
+	//Close Ncurses window, return to normal termianl output
 	refresh();
 	endwin();
 }

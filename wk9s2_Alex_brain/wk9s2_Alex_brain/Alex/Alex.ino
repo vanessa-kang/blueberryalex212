@@ -662,18 +662,19 @@ void loop() {
     sendBadChecksum();
   }
   
-  endTime = millis();
-  if((endTime - startTime) > 1000) {
-    startTime = 0;
-    endTime = 0;
-    stop();
-  }
+//  endTime = millis();
+//  if((endTime - startTime) > 1000) {
+//    startTime = 0;
+//    endTime = 0;
+//    stop();
+//  }
   
   if (deltaDist > 0) {
     if (dir == FORWARD) {
       if (forwardDist > newDist) {
         deltaDist = 0;
         newDist = 0;
+        stop();
         sendFinish();
       }
     }
@@ -681,6 +682,7 @@ void loop() {
       if (reverseDist > newDist) {
         deltaDist = 0;
         newDist = 0;
+        stop();
         sendFinish();
       }
     }
@@ -688,6 +690,7 @@ void loop() {
       if (leftDist > newDist) {
         deltaDist = 0;
         newDist = 0;
+        stop();
         sendFinish();
       }
     }
@@ -695,6 +698,7 @@ void loop() {
       if (rightDist > newDist) {
         deltaDist = 0;
         newDist = 0;
+        stop();
         sendFinish();
       }
     }

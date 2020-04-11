@@ -183,11 +183,11 @@ void getParams(TPacket *commandPacket, char ch)
 	//printf("Sending commands\n");
 	if(ch == 'w' || ch == 's') {
 		commandPacket->params[0] = 5;
-		commandPacket->params[1] = 85;
+		commandPacket->params[1] = 55;
 	}
 	else {
 		commandPacket->params[0] = 15;
-		commandPacket->params[1] = 90;
+		commandPacket->params[1] = 50;
 	}
 }
 
@@ -301,10 +301,11 @@ int main()
 		//}
 		//flushInput();
 		sendCommand(ch);
-		while(recvOk == 0 && getch() != 'x');
+		//while(recvOk == 0 && getch() != 'x');
 	}
 
 	printf("Closing connection to Arduino.\n");
 	endSerial();
-	//endwin();
+	refresh();
+	endwin();
 }

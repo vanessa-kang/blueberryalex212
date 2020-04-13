@@ -40,15 +40,21 @@ volatile TDirection dir = STOP;
 #define RR                  10  // Right reverse pin
 
 // Constants for PID
-#define IDEAL_SPEED         10  //Roughly 195 counts (1 rev) per 2 seconds
-#define BASE_POWER          125 //Starting power level
+#define IDEAL_SPEED         15  //Roughly 15 counts per 100ms = 150 counts per sec = 3/4 revs per second
+#define IDEAL_SPEED_TURN    6   //Ideal speed for turning.
+#define BASE_POWER          50  //Starting power level
+#define BASE_POWER_TURN     125  //Starting base power for turns
 #define PID_INTERVAL        100 //Period between each PID value update
-#define TURNING_DIV         1.75  //Divide by this constant for turns to prevent turning too fast
 
 //P,I and D coefficients
-#define kp                  4
-#define ki                  1
-#define kd                  3
+#define KP                  10
+#define KI                  7
+#define KD                  10
+
+//P,I and D coefficients for turning
+#define KPT                 15
+#define KIT                 2
+#define KDT                 4
 
 /*
       Alex's State Variables
@@ -307,8 +313,8 @@ void startMotors()
 // continue moving forward indefinitely.
 void forward()
 {
-  leftpid();
-  rightpid();
+  leftpid(IDEAL_SPEED, BASE_POWER, KP, KI, KD);
+  rightpid(IDEAL_SPEED, BASE_POWER, KP, KI, KD);
   analogWrite(LF, pidpwr);
   analogWrite(RF, pidpwrR);
   analogWrite(LR, 0);
@@ -322,8 +328,8 @@ void forward()
 // continue reversing indefinitely.
 void reverse()
 {
-  leftpid();
-  rightpid();
+  leftpid(IDEAL_SPEED, BASE_POWER, KP, KI, KD);
+  rightpid(IDEAL_SPEED, BASE_POWER, KP, KI, KD);
   analogWrite(LR, pidpwr);
   analogWrite(RR, pidpwrR);
   analogWrite(LF, 0);
@@ -337,12 +343,11 @@ void reverse()
 // turn left indefinitely.
 void left()
 {
-  leftpid();
-  rightpid();
-  int pidpwrTurn = pidpwr / TURNING_DIV;
-  int pidpwrTurnR = pidpwrR / TURNING_DIV;
-  analogWrite(LR, pidpwrTurn);
-  analogWrite(RF, pidpwrTurnR);
+  //leftpid(IDEAL_SPEED_TURN, BASE_POWER_TURN, KPT, KIT, KDT);
+  pidpwr = (pidpwrR > 240) ? 75 : 0;
+  rightpid(IDEAL_SPEED_TURN, BASE_POWER_TURN, KPT, KIT, KDT);
+  analogWrite(LR, pidpwr);
+  analogWrite(RF, pidpwrR);
   analogWrite(LF, 0);
   analogWrite(RR, 0);
 }
@@ -354,12 +359,11 @@ void left()
 // turn right indefinitely.
 void right()
 {  
-  leftpid();
-  rightpid();
-  int pidpwrTurn = pidpwr / TURNING_DIV;
-  int pidpwrTurnR = pidpwrR / TURNING_DIV;
-  analogWrite(LF, pidpwrTurn);
-  analogWrite(RR, pidpwrTurnR);
+  leftpid(IDEAL_SPEED_TURN, BASE_POWER_TURN, KPT, KIT, KDT);
+  pidpwrR = (pidpwr > 240) ? 75 : 0;
+  //rightpid(IDEAL_SPEED_TURN, BASE_POWER_TURN, KPT, KIT, KDT);
+  analogWrite(LF, pidpwr);
+  analogWrite(RR, pidpwrR);
   analogWrite(LR, 0);
   analogWrite(RF, 0);
 }
@@ -373,67 +377,69 @@ void stop()
   analogWrite(RR, 0);
 }
 
-void leftpid()
+void leftpid(int idealSpeed, int basePower, int kp, int ki, int kd)
 {
   if(clearFlag == 1) {
+    pidpwr = 150;
     totalError = 0;
     lastError = 0;
     clearFlag = 0;
+    startFlag = 1;
   }
-  if(startFlag == 0) {
+  if(startFlag == 1) {
     startPID = millis();
     startlfT = lfT;
-    startFlag = 1;
+    startFlag = 0;
   }
   totalTime = millis() - startPID;
 
   if(totalTime > PID_INTERVAL) {
-    startFlag = 0;
+    startFlag = 1;
     totallfT = (lfT - startlfT);
     
     /* Positive error = too slow; negative error = too fast */
-    intervalError = IDEAL_SPEED - totallfT;
+    intervalError = idealSpeed - totallfT;
     totalError += intervalError;
     deltaError = intervalError - lastError;
     
-    pidpwr = BASE_POWER + kp*intervalError + ki*totalError + kd*deltaError;
+    pidpwr = basePower + kp*intervalError + ki*totalError + kd*deltaError;
     if(pidpwr > 255) pidpwr = 255;
     else if (pidpwr <0) pidpwr = 0;
-
     lastError = intervalError;
   }
   
 }
 
-void rightpid()
+void rightpid(int idealSpeed, int basePower, int kp, int ki, int kd)
 {
   if(clearFlagR == 1) {
+    pidpwrR = 150;
     totalErrorR = 0;
     lastErrorR = 0;
     clearFlagR = 0;
+    startFlagR = 1;
   }
-  if(startFlagR == 0) {
+  if(startFlagR == 1) {
     startPIDR = millis();
     startrfT = rfT;
-    startFlagR = 1;
+    startFlagR = 0;
   }
   totalTimeR = millis() - startPIDR;
 
   if(totalTimeR > PID_INTERVAL) {
-    startFlagR = 0;
+    startFlagR = 1;
     totalrfT = (rfT - startrfT);
     
     /* Positive error = too slow; negative error = too fast */
-    intervalErrorR = IDEAL_SPEED - totalrfT;
+    intervalErrorR = idealSpeed- totalrfT;
     totalErrorR += intervalErrorR;
     deltaErrorR = intervalErrorR - lastErrorR;
     
-    pidpwrR = BASE_POWER + kp*intervalErrorR + ki*totalErrorR + kd*deltaErrorR;
+    pidpwrR = basePower + kp*intervalErrorR + ki*totalErrorR + kd*deltaErrorR;
     if(pidpwrR > 255) pidpwrR = 255;
     else if (pidpwrR <0) pidpwrR = 0;
     
     lastErrorR = intervalErrorR;
-
 //    Serial.print("Interval error: ");
 //    Serial.print(intervalErrorR);
 //    Serial.print(" // totalError: ");
@@ -469,6 +475,8 @@ void initializeState()
 
 void handleCommand(TPacket *command)
 {
+  clearFlag = 1;
+  clearFlagR = 1;
   switch (command->command)
   {
     // For movement commands, param[0] = distance, param[1] = speed.
@@ -564,8 +572,6 @@ void handlePacket(TPacket *packet)
   {
     case PACKET_TYPE_COMMAND:
       handleCommand(packet);
-      clearFlag = 1;
-      clearFlagR = 1;
       break;
 
     case PACKET_TYPE_RESPONSE:
@@ -589,6 +595,7 @@ void loop() {
 //  Serial.println(rfT);
 //  delay(500);
 
+  //dir = STOP;
       
   TPacket recvPacket; // This holds commands from the Pi
 
@@ -619,6 +626,10 @@ void loop() {
     right();
   }
   else stop();
+
+//  Serial.print(pidpwr);
+//  Serial.print(" // ");
+//  Serial.println(pidpwrR);
 
 
 }

@@ -421,7 +421,7 @@ void reverse()
 void left()
 {
   //leftpid(IDEAL_SPEED_TURN, BASE_POWER_TURN, KPT, KIT, KDT);
-  pidpwr = (pidpwrR > 240) ? 75 : 0;
+  pidpwr = (pidpwrR > 240) ? 160 : 0;
   rightpid(IDEAL_SPEED_TURN, BASE_POWER_TURN, KPT, KIT, KDT);
   analogWrite(LR, pidpwr);
   analogWrite(RF, pidpwrR);
@@ -437,7 +437,7 @@ void left()
 void right()
 {  
   leftpid(IDEAL_SPEED_TURN, BASE_POWER_TURN, KPT, KIT, KDT);
-  pidpwrR = (pidpwr > 240) ? 75 : 0;
+  pidpwrR = (pidpwr > 240) ? 160 : 0;
   //rightpid(IDEAL_SPEED_TURN, BASE_POWER_TURN, KPT, KIT, KDT);
   analogWrite(LF, pidpwr);
   analogWrite(RR, pidpwrR);
@@ -708,7 +708,7 @@ void loop() {
     putArduinoToIdle();
   }
 
-//  Serial.print(pidpwr);
+//  Serial.print(pidclearpwr);
 //  Serial.print(" // ");
 //  Serial.println(pidpwrR);
 

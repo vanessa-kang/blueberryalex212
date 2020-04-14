@@ -2,6 +2,7 @@
 #include "packet.h"
 #include "constants.h"
 #include <stdarg.h>
+#include <avr/sleep.h>
 
 typedef enum
 {
@@ -59,6 +60,17 @@ volatile TDirection dir = STOP;
 /*
       Alex's State Variables
 */
+//power reduction and sleep mode control
+#define PRR_TWI_MASK            0b10000000 
+#define PRR_SPI_MASK            0b00000100 
+#define ADCSRA_ADC_MASK         0b10000000 
+#define PRR_ADC_MASK            0b00000001 
+#define PRR_TIMER2_MASK         0b01000000 
+#define PRR_TIMER0_MASK         0b00100000 
+#define PRR_TIMER1_MASK         0b00001000 
+#define SMCR_SLEEP_ENABLE_MASK  0b00000001 
+#define SMCR_IDLE_MODE_MASK     0b11110001
+
 
 // Store the ticks from Alex's left and
 // right encoders.
@@ -78,6 +90,71 @@ int clearFlag = 0, clearFlagR = 0;
    Alex Communication Routines.
 
 */
+void WDT_off(void) { 
+
+  //Global interrupt should be turned OFF here if not already done so
+  cli();
+
+  //Clear WDRF in MCUSR 
+  MCUSR &= ~(1<<WDRF); 
+ 
+  //Write logical one to WDCE and WDE
+  //Keep old prescaler setting to prevent unintentional time-out
+  WDTCSR |= (1<<WDCE) | (1<<WDE); 
+ 
+  //Turn off WDT 
+  WDTCSR = 0x00; 
+   
+  /* Global interrupt should be turned ON here if subsequent operations after calling this function do not require turning off global interrupt */
+  sei();
+}
+
+//call this function within void setup() later
+void setupPowerSaving() {
+  // Turn off the Watchdog Timer   
+  WDT_off();
+ 
+  // Modify PRR to shut down TWI
+  PRR |= PRR_TWI_MASK;
+ 
+  // Modify PRR to shut down SPI
+  PRR |= PRR_SPI_MASK;
+ 
+  // Modify ADCSRA to disable ADC,
+  ADCSRA &= 0b01111111;
+
+  // then modify PRR to shut down ADC
+  PRR |= PRR_ADC_MASK;
+
+  // Set the SMCR to choose the IDLE sleep mode   
+  // Do not set the Sleep Enable (SE) bit yet 
+  SMCR |= SMCR_IDLE_MODE_MASK;
+}
+
+//call this in void loop() when appropriate
+//e.g. when there is no USART data AND motors are stopped
+void putArduinoToIdle() {   
+
+  // Modify PRR to shut down TIMER 0, 1, and 2
+  PRR |= PRR_TIMER0_MASK;
+  PRR |= PRR_TIMER1_MASK;
+  PRR |= PRR_TIMER2_MASK;
+
+  // Modify SE bit in SMCR to enable (i.e., allow) sleep
+  SMCR |= SMCR_SLEEP_ENABLE_MASK;
+
+  // The following function puts ATmega328P’s MCU into sleep;   
+  // it wakes up from sleep when USART serial data arrives 
+  sleep_cpu();     
+
+  // Modify SE bit in SMCR to disable (i.e., disallow) sleep
+  SMCR &= 0b11111110;
+  
+  // Modify PRR to power up TIMER 0, 1, and 2 
+  PRR &= 0b10010111;
+}
+
+
 
 TResult readPacket(TPacket *packet) {
   // Reads in data from the serial port and
@@ -563,6 +640,7 @@ void setup() {
   startMotors();
   enablePullups();
   initializeState();
+  setupPowerSaving();
   sei();
 }
 
@@ -625,7 +703,10 @@ void loop() {
   else if(dir == RIGHT) {
     right();
   }
-  else stop();
+  else{
+    stop();
+    putArduinoToIdle();
+  }
 
 //  Serial.print(pidpwr);
 //  Serial.print(" // ");

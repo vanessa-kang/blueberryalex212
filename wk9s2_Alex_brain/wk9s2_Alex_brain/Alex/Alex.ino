@@ -128,7 +128,7 @@ void setupPowerSaving() {
 
   // Set the SMCR to choose the IDLE sleep mode   
   // Do not set the Sleep Enable (SE) bit yet 
-  SMCR |= SMCR_IDLE_MODE_MASK;
+  SMCR &= SMCR_IDLE_MODE_MASK;
 }
 
 //call this in void loop() when appropriate
@@ -367,6 +367,9 @@ void writeSerial(const char *buffer, int len)
 // to drive the motors.
 void setupMotors()
 {
+  DDRD |= 0b01100000; //set pin 5 (PD5) and pin 6 (PD6) as output
+  DDRB |= 0b00001100; //set pin 10 (PB2) and pin 11 (PB3) as output
+  
   /* Our motor set up is:
         A1IN - Pin 5, PD5, OC0B
         A2IN - Pin 6, PD6, OC0A
@@ -376,11 +379,10 @@ void setupMotors()
 }
 
 // Start the PWM for Alex's motors.
-// We will implement this later. For now it is
-// blank.
+// We will implement this later. For now it is blank.
 void startMotors()
 {
-
+  //implement baremetal PWM here?
 }
 
 // Move Alex forward "dist" cm at speed "speed".
@@ -394,8 +396,10 @@ void forward()
   rightpid(IDEAL_SPEED, BASE_POWER, KP, KI, KD);
   analogWrite(LF, pidpwr);
   analogWrite(RF, pidpwrR);
-  analogWrite(LR, 0);
-  analogWrite(RR, 0);
+  PORTD &= 0b10111111; //replaces analogWrite(LR, 0);
+  PORTB &= 0b11111011; //replaces analogWrite(RR, 0);
+//  analogWrite(LR, 0);
+//  analogWrite(RR, 0);
 }
 
 // Reverse Alex "dist" cm at speed "speed".
@@ -409,8 +413,10 @@ void reverse()
   rightpid(IDEAL_SPEED, BASE_POWER, KP, KI, KD);
   analogWrite(LR, pidpwr);
   analogWrite(RR, pidpwrR);
-  analogWrite(LF, 0);
-  analogWrite(RF, 0);
+  PORTD &= 0b11011111; //replaces analogWrite(LF, 0);
+  PORTB &= 0b11110111; //replaces analogWrite(RF, 0);
+//  analogWrite(LF, 0);
+//  analogWrite(RF, 0);
 }
 
 // Turn Alex left "ang" degrees at speed "speed".
@@ -425,8 +431,10 @@ void left()
   rightpid(IDEAL_SPEED_TURN, BASE_POWER_TURN, KPT, KIT, KDT);
   analogWrite(LR, pidpwr);
   analogWrite(RF, pidpwrR);
-  analogWrite(LF, 0);
-  analogWrite(RR, 0);
+  PORTD &= 0b11011111; //replaces analogWrite(LF, 0);
+  PORTB &= 0b11111011; //replaces analogWrite(RR, 0);
+//  analogWrite(LF, 0);
+//  analogWrite(RR, 0);
 }
 
 // Turn Alex right "ang" degrees at speed "speed".
@@ -441,17 +449,22 @@ void right()
   //rightpid(IDEAL_SPEED_TURN, BASE_POWER_TURN, KPT, KIT, KDT);
   analogWrite(LF, pidpwr);
   analogWrite(RR, pidpwrR);
-  analogWrite(LR, 0);
-  analogWrite(RF, 0);
+  PORTD &= 0b10111111; //replaces analogWrite(LR, 0);
+  PORTB &= 0b11110111; //replaces analogWrite(RF, 0);
+//  analogWrite(LR, 0);
+//  analogWrite(RF, 0);
 }
 
 // Stop Alex. To replace with bare-metal code later.
 void stop()
 {
-  analogWrite(LF, 0);
-  analogWrite(LR, 0);
+  //this baremetal is not working idk why
+//  PORTD &= 0b10011111; //replaces analogWrite(LR, 0) and analogWrite(LF, 0)
+//  PORTB &= 0b11110011; //replaces analogWrite(RF, 0) and analogWrite(RR, 0)
   analogWrite(RF, 0);
   analogWrite(RR, 0);
+  analogWrite(LF, 0);
+  analogWrite(LR, 0);
 }
 
 void leftpid(int idealSpeed, int basePower, int kp, int ki, int kd)

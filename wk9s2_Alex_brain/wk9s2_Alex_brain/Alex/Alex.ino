@@ -396,10 +396,10 @@ void forward()
   rightpid(IDEAL_SPEED, BASE_POWER, KP, KI, KD);
   analogWrite(LF, pidpwr);
   analogWrite(RF, pidpwrR);
-  PORTD &= 0b10111111; //replaces analogWrite(LR, 0);
-  PORTB &= 0b11111011; //replaces analogWrite(RR, 0);
-//  analogWrite(LR, 0);
-//  analogWrite(RR, 0);
+//  PORTD &= 0b10111111; //replaces analogWrite(LR, 0);
+//  PORTB &= 0b11111011; //replaces analogWrite(RR, 0);
+  analogWrite(LR, 0);
+  analogWrite(RR, 0);
 }
 
 // Reverse Alex "dist" cm at speed "speed".
@@ -413,10 +413,10 @@ void reverse()
   rightpid(IDEAL_SPEED, BASE_POWER, KP, KI, KD);
   analogWrite(LR, pidpwr);
   analogWrite(RR, pidpwrR);
-  PORTD &= 0b11011111; //replaces analogWrite(LF, 0);
-  PORTB &= 0b11110111; //replaces analogWrite(RF, 0);
-//  analogWrite(LF, 0);
-//  analogWrite(RF, 0);
+//  PORTD &= 0b11011111; //replaces analogWrite(LF, 0);
+//  PORTB &= 0b11110111; //replaces analogWrite(RF, 0);
+  analogWrite(LF, 0);
+  analogWrite(RF, 0);
 }
 
 // Turn Alex left "ang" degrees at speed "speed".
@@ -431,10 +431,10 @@ void left()
   rightpid(IDEAL_SPEED_TURN, BASE_POWER_TURN, KPT, KIT, KDT);
   analogWrite(LR, pidpwr);
   analogWrite(RF, pidpwrR);
-  PORTD &= 0b11011111; //replaces analogWrite(LF, 0);
-  PORTB &= 0b11111011; //replaces analogWrite(RR, 0);
-//  analogWrite(LF, 0);
-//  analogWrite(RR, 0);
+//  PORTD &= 0b11011111; //replaces analogWrite(LF, 0);
+//  PORTB &= 0b11111011; //replaces analogWrite(RR, 0);
+  analogWrite(LF, 0);
+  analogWrite(RR, 0);
 }
 
 // Turn Alex right "ang" degrees at speed "speed".
@@ -449,10 +449,10 @@ void right()
   //rightpid(IDEAL_SPEED_TURN, BASE_POWER_TURN, KPT, KIT, KDT);
   analogWrite(LF, pidpwr);
   analogWrite(RR, pidpwrR);
-  PORTD &= 0b10111111; //replaces analogWrite(LR, 0);
-  PORTB &= 0b11110111; //replaces analogWrite(RF, 0);
-//  analogWrite(LR, 0);
-//  analogWrite(RF, 0);
+//  PORTD &= 0b10111111; //replaces analogWrite(LR, 0);
+//  PORTB &= 0b11110111; //replaces analogWrite(RF, 0);
+  analogWrite(LR, 0);
+  analogWrite(RF, 0);
 }
 
 // Stop Alex. To replace with bare-metal code later.

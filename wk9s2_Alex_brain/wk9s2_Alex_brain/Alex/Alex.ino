@@ -193,14 +193,6 @@ void sendMessage(const char *message) {
   sendResponse(&messagePacket);
 }
 
-void dbprint(char *format, ...) {
-  va_list args;
-  char buffer[128];
-  va_start(args, format);
-  vsprintf(buffer, format, args);
-  sendMessage(buffer);
-}
-
 void sendBadPacket() {
   // Tell the Pi that it sent us a packet with a bad
   // magic number.
@@ -373,8 +365,8 @@ void setupMotors()
   /* Our motor set up is:
         A1IN - Pin 5, PD5, OC0B
         A2IN - Pin 6, PD6, OC0A
-        B1IN - Pin 10, PB2, OC1B
-        B2In - pIN 11, PB3, OC2A
+        B1IN - Pin 11, PB3, OC2A
+        B2In - pIN 10, PB2, OC1B
   */
 }
 
@@ -382,7 +374,12 @@ void setupMotors()
 // We will implement this later. For now it is blank.
 void startMotors()
 {
-  //implement baremetal PWM here?
+  //Set and clear OC0A(pin 6) and OC0B(pin 5) on compare match. Phase correct PWM 
+  TCCR0A = 0B10100001;
+  TCNT0 = 0;
+  OCR0A = 0;
+  OCR0B = 0;
+  TCCR0B = 0b00000011;
 }
 
 // Move Alex forward "dist" cm at speed "speed".
@@ -394,12 +391,13 @@ void forward()
 {
   leftpid(IDEAL_SPEED, BASE_POWER, KP, KI, KD);
   rightpid(IDEAL_SPEED, BASE_POWER, KP, KI, KD);
-  analogWrite(LF, pidpwr);
-  analogWrite(RF, pidpwrR);
-//  PORTD &= 0b10111111; //replaces analogWrite(LR, 0);
-//  PORTB &= 0b11111011; //replaces analogWrite(RR, 0);
-  analogWrite(LR, 0);
-  analogWrite(RR, 0);
+//  analogWrite(LF, pidpwr);
+//  analogWrite(RF, pidpwrR);
+//  analogWrite(LR, 0);
+//  analogWrite(RR, 0);
+  OCR0A = 0;
+  OCR0B = 50;
+  PORTB &= 0b11110011;
 }
 
 // Reverse Alex "dist" cm at speed "speed".
@@ -530,12 +528,6 @@ void rightpid(int idealSpeed, int basePower, int kp, int ki, int kd)
     else if (pidpwrR <0) pidpwrR = 0;
     
     lastErrorR = intervalErrorR;
-//    Serial.print("Interval error: ");
-//    Serial.print(intervalErrorR);
-//    Serial.print(" // totalError: ");
-//    Serial.print(totalErrorR);
-//    Serial.print(" // pidpwrR: ");
-//    Serial.println(pidpwrR);
   }
   
 }

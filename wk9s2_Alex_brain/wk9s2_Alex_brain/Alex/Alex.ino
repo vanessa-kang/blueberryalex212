@@ -39,23 +39,27 @@ volatile TDirection dir = STOP;
 #define LR                  6   // Left reverse pin
 #define RF                  11  // Right forward pin
 #define RR                  10  // Right reverse pin
+#define LF_DUTY             OCR0B
+#define LR_DUTY             OCR0A
+#define RF_DUTY             OCR2A
+#define RR_DUTY             OCR1B
 
 // Constants for PID
 #define IDEAL_SPEED         15  //Roughly 15 counts per 100ms = 150 counts per sec = 3/4 revs per second
-#define IDEAL_SPEED_TURN    6   //Ideal speed for turning.
-#define BASE_POWER          50  //Starting power level
-#define BASE_POWER_TURN     125  //Starting base power for turns
+#define IDEAL_SPEED_TURN    5   //Ideal speed for turning.
+#define BASE_POWER          75  //Starting power level
+#define BASE_POWER_TURN     130  //Starting base power for turns
 #define PID_INTERVAL        100 //Period between each PID value update
 
 //P,I and D coefficients
-#define KP                  10
-#define KI                  7
-#define KD                  10
+#define KP                  2
+#define KI                  0.4
+#define KD                  5.5
 
-//P,I and D coefficients for turning
-#define KPT                 15
-#define KIT                 2
-#define KDT                 4
+//P,I and D coefficients for turning Old: 15/2/4
+#define KPT                 3
+#define KIT                 0.6
+#define KDT                 8.5
 
 /*
       Alex's State Variables
@@ -363,10 +367,10 @@ void setupMotors()
   DDRB |= 0b00001100; //set pin 10 (PB2) and pin 11 (PB3) as output
   
   /* Our motor set up is:
-        A1IN - Pin 5, PD5, OC0B
-        A2IN - Pin 6, PD6, OC0A
-        B1IN - Pin 11, PB3, OC2A
-        B2In - pIN 10, PB2, OC1B
+        LF - Pin 5, PD5, OC0B
+        LR - Pin 6, PD6, OC0A
+        RF - Pin 11, PB3, OC2A
+        RR - pIN 10, PB2, OC1B
   */
 }
 
@@ -374,12 +378,22 @@ void setupMotors()
 // We will implement this later. For now it is blank.
 void startMotors()
 {
-  //Set and clear OC0A(pin 6) and OC0B(pin 5) on compare match. Phase correct PWM 
-  TCCR0A = 0B10100001;
-  TCNT0 = 0;
-  OCR0A = 0;
-  OCR0B = 0;
+  //Set and clear OC0A(pin 6) and OC0B(pin 5) on compare match. Fast PWM
+  TCCR0A = 0b10100011;
+  //Set and clear OC2A(pin 11) on compare match. Fast PWM 
+  TCCR2A = 0b10000011;
+  //Set and clear OC1B(pin 10) on compare match. Fast PWM 8-bit
+  TCCR1A = 0b00100001;
+
+  //Initialize timer counter to 0
+  TCNT1 = TCNT2 = 0;
+  //Initialize compare match values to 0. Duty cycle 0
+  LF_DUTY = LR_DUTY = RF_DUTY = RR_DUTY = 0;
+  
+  //Prescaler 64
   TCCR0B = 0b00000011;
+  TCCR2B = 0b00000011;
+  TCCR1B = 0b00001011;
 }
 
 // Move Alex forward "dist" cm at speed "speed".
@@ -391,13 +405,14 @@ void forward()
 {
   leftpid(IDEAL_SPEED, BASE_POWER, KP, KI, KD);
   rightpid(IDEAL_SPEED, BASE_POWER, KP, KI, KD);
+  LF_DUTY = pidpwr;
+  LR_DUTY = 0;
+  RF_DUTY = pidpwrR;
+  RR_DUTY = 0;
 //  analogWrite(LF, pidpwr);
-//  analogWrite(RF, pidpwrR);
 //  analogWrite(LR, 0);
+//  analogWrite(RF, pidpwrR);
 //  analogWrite(RR, 0);
-  OCR0A = 0;
-  OCR0B = 50;
-  PORTB &= 0b11110011;
 }
 
 // Reverse Alex "dist" cm at speed "speed".
@@ -409,12 +424,10 @@ void reverse()
 {
   leftpid(IDEAL_SPEED, BASE_POWER, KP, KI, KD);
   rightpid(IDEAL_SPEED, BASE_POWER, KP, KI, KD);
-  analogWrite(LR, pidpwr);
-  analogWrite(RR, pidpwrR);
-//  PORTD &= 0b11011111; //replaces analogWrite(LF, 0);
-//  PORTB &= 0b11110111; //replaces analogWrite(RF, 0);
-  analogWrite(LF, 0);
-  analogWrite(RF, 0);
+  LR_DUTY = pidpwr;
+  LF_DUTY = 0;
+  RR_DUTY = pidpwrR;
+  RF_DUTY = 0;
 }
 
 // Turn Alex left "ang" degrees at speed "speed".
@@ -427,12 +440,10 @@ void left()
   //leftpid(IDEAL_SPEED_TURN, BASE_POWER_TURN, KPT, KIT, KDT);
   pidpwr = (pidpwrR > 240) ? 160 : 0;
   rightpid(IDEAL_SPEED_TURN, BASE_POWER_TURN, KPT, KIT, KDT);
-  analogWrite(LR, pidpwr);
-  analogWrite(RF, pidpwrR);
-//  PORTD &= 0b11011111; //replaces analogWrite(LF, 0);
-//  PORTB &= 0b11111011; //replaces analogWrite(RR, 0);
-  analogWrite(LF, 0);
-  analogWrite(RR, 0);
+  LR_DUTY = pidpwr;
+  RF_DUTY = pidpwrR;
+  LF_DUTY = 0;
+  RR_DUTY = 0;
 }
 
 // Turn Alex right "ang" degrees at speed "speed".
@@ -445,30 +456,24 @@ void right()
   leftpid(IDEAL_SPEED_TURN, BASE_POWER_TURN, KPT, KIT, KDT);
   pidpwrR = (pidpwr > 240) ? 160 : 0;
   //rightpid(IDEAL_SPEED_TURN, BASE_POWER_TURN, KPT, KIT, KDT);
-  analogWrite(LF, pidpwr);
-  analogWrite(RR, pidpwrR);
-//  PORTD &= 0b10111111; //replaces analogWrite(LR, 0);
-//  PORTB &= 0b11110111; //replaces analogWrite(RF, 0);
-  analogWrite(LR, 0);
-  analogWrite(RF, 0);
+  LF_DUTY = pidpwr;
+  RR_DUTY = pidpwrR;
+  LR_DUTY = 0;
+  RF_DUTY = 0;
 }
 
 // Stop Alex. To replace with bare-metal code later.
-void stop()
+void stopAlex()
 {
-  //this baremetal is not working idk why
-//  PORTD &= 0b10011111; //replaces analogWrite(LR, 0) and analogWrite(LF, 0)
-//  PORTB &= 0b11110011; //replaces analogWrite(RF, 0) and analogWrite(RR, 0)
-  analogWrite(RF, 0);
-  analogWrite(RR, 0);
-  analogWrite(LF, 0);
-  analogWrite(LR, 0);
+   LF_DUTY = LR_DUTY = RF_DUTY = RR_DUTY = 0;
+   PORTD &= 0b10011111;
+   PORTB &= 0b11110011;
 }
 
 void leftpid(int idealSpeed, int basePower, int kp, int ki, int kd)
 {
   if(clearFlag == 1) {
-    pidpwr = 150;
+    pidpwr = basePower;
     totalError = 0;
     lastError = 0;
     clearFlag = 0;
@@ -490,7 +495,7 @@ void leftpid(int idealSpeed, int basePower, int kp, int ki, int kd)
     totalError += intervalError;
     deltaError = intervalError - lastError;
     
-    pidpwr = basePower + kp*intervalError + ki*totalError + kd*deltaError;
+    pidpwr += kp*intervalError + ki*totalError + kd*deltaError;
     if(pidpwr > 255) pidpwr = 255;
     else if (pidpwr <0) pidpwr = 0;
     lastError = intervalError;
@@ -501,7 +506,7 @@ void leftpid(int idealSpeed, int basePower, int kp, int ki, int kd)
 void rightpid(int idealSpeed, int basePower, int kp, int ki, int kd)
 {
   if(clearFlagR == 1) {
-    pidpwrR = 150;
+    pidpwrR = basePower;
     totalErrorR = 0;
     lastErrorR = 0;
     clearFlagR = 0;
@@ -523,7 +528,7 @@ void rightpid(int idealSpeed, int basePower, int kp, int ki, int kd)
     totalErrorR += intervalErrorR;
     deltaErrorR = intervalErrorR - lastErrorR;
     
-    pidpwrR = basePower + kp*intervalErrorR + ki*totalErrorR + kd*deltaErrorR;
+    pidpwrR += kp*intervalErrorR + ki*totalErrorR + kd*deltaErrorR;
     if(pidpwrR > 255) pidpwrR = 255;
     else if (pidpwrR <0) pidpwrR = 0;
     
@@ -672,13 +677,6 @@ void handlePacket(TPacket *packet)
 }
 
 void loop() {
-
-//  dir = FORWARD;
-//  Serial.println(lfT);
-//  Serial.println(rfT);
-//  delay(500);
-
-  //dir = STOP;
       
   TPacket recvPacket; // This holds commands from the Pi
 
@@ -709,13 +707,8 @@ void loop() {
     right();
   }
   else{
-    stop();
+    stopAlex();
     putArduinoToIdle();
   }
-
-//  Serial.print(pidclearpwr);
-//  Serial.print(" // ");
-//  Serial.println(pidpwrR);
-
 
 }

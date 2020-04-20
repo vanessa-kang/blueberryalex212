@@ -10,11 +10,11 @@
 #include <ncurses.h>
 
 #define PORT_NAME			"/dev/ttyACM0"
-//define PORT_NAME			"/dev/ttyACM1"
 #define BAUD_RATE			B9600
 
+// Command to compile: gcc alex-pi.cpp serial.cpp serialize.cpp -pthread -lncurses -o alex-pi
+
 int exitFlag=0;
-int recvOk = 0;
 sem_t _xmitSema;
 
 void handleError(TResult error)
@@ -53,11 +53,6 @@ void handleResponse(TPacket *packet)
 
 		case RESP_STATUS:
 			handleStatus(packet);
-		break;
-		
-		case RESP_FINISH:
-			printw("Command Finished\n");
-			recvOk = 1;
 		break;
 
 		default:
@@ -157,25 +152,6 @@ void *receiveThread(void *p)
 	}
 }
 
-//void flushInput()
-//{
-	//char c;
-
-	//while((c = getchar()) != '\n' && c != EOF);
-//}
-
-//void getParams(TPacket *commandPacket, char ch)
-//{
-	//if(ch == 'w' || ch == 's') {
-		//commandPacket->params[0] = 5;
-		//commandPacket->params[1] = 55;
-	//}
-	//else {
-		//commandPacket->params[0] = 15;
-		//commandPacket->params[1] = 50;
-	//}
-//}
-
 void sendCommand(char command)
 {
 	TPacket commandPacket;
@@ -252,6 +228,7 @@ int main()
 	cbreak();	//No input buffering
 	noecho();	//Does not echo the entered chracter
 	scrollok(stdscr, TRUE);	//Automatically scrolls the window if exceed bottom
+	//End ncurses initialization
 	
 	// Connect to the Arduino
 	startSerial(PORT_NAME, BAUD_RATE, 8, 'N', 1, 5);
@@ -274,7 +251,6 @@ int main()
 
 	while(!exitFlag)
 	{
-		recvOk = 0;
 		ch = getch();
 		sendCommand(ch);
 	}
@@ -282,7 +258,7 @@ int main()
 	printw("Closing connection to Arduino.\n");
 	endSerial();
 	
-	//Close Ncurses window, return to normal termianl output
+	//Close Ncurses window, return to normal terminal output
 	refresh();
 	endwin();
 }

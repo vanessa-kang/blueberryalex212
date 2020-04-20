@@ -33,12 +33,13 @@ volatile TDirection dir = STOP;
 // Turning radius of Alex, for turns
 #define RADIUS              5.5
 
-// Motor control pins. You need to adjust these till
-// Alex moves in the correct direction
+// Motor control pins.
 #define LF                  5   // Left forward pin
 #define LR                  6   // Left reverse pin
 #define RF                  11  // Right forward pin
 #define RR                  10  // Right reverse pin
+
+//Timer compare-match registers for bare-metal PWM
 #define LF_DUTY             OCR0B
 #define LR_DUTY             OCR0A
 #define RF_DUTY             OCR2A
@@ -56,7 +57,7 @@ volatile TDirection dir = STOP;
 #define KI                  0.4
 #define KD                  6
 
-//P,I and D coefficients for turning Old: 15/2/4
+//P,I and D coefficients for turning
 #define KPT                 3
 #define KIT                 0.6
 #define KDT                 8
@@ -243,13 +244,6 @@ void sendOK() {
   sendResponse(&okPacket);
 }
 
-void sendFinish() {
-  TPacket okPacket;
-  okPacket.packetType = PACKET_TYPE_RESPONSE;
-  okPacket.command = RESP_FINISH;
-  sendResponse(&okPacket);
-}
-
 void sendResponse(TPacket *packet) {
   // Takes a packet, serializes it then sends it out
   // over the serial port.
@@ -385,10 +379,15 @@ void startMotors()
   //Set and clear OC1B(pin 10) on compare match. Fast PWM 8-bit
   TCCR1A = 0b00100001;
 
-  //Initialize timer counter to 0
-  TCNT1 = TCNT2 = 0;
+  //Initialize timer counter to 0.
+  TCNT0 = 0;
+  TCNT1 = 0;
+  TCNT2 = 0;
   //Initialize compare match values to 0. Duty cycle 0
-  LF_DUTY = LR_DUTY = RF_DUTY = RR_DUTY = 0;
+  LF_DUTY = 0;
+  LR_DUTY = 0;
+  RF_DUTY = 0;
+  RR_DUTY = 0;
   
   //Prescaler 64
   TCCR0B = 0b00000011;
@@ -403,16 +402,14 @@ void startMotors()
 // continue moving forward indefinitely.
 void forward()
 {
+  //Update PWM values
   leftpid(IDEAL_SPEED, BASE_POWER, KP, KI, KD);
   rightpid(IDEAL_SPEED, BASE_POWER, KP, KI, KD);
+  //Write the PWM values to the compare-match registers
   LF_DUTY = pidpwr;
   LR_DUTY = 0;
   RF_DUTY = pidpwrR;
   RR_DUTY = 0;
-//  analogWrite(LF, pidpwr);
-//  analogWrite(LR, 0);
-//  analogWrite(RF, pidpwrR);
-//  analogWrite(RR, 0);
 }
 
 // Reverse Alex "dist" cm at speed "speed".
@@ -437,9 +434,12 @@ void reverse()
 // turn left indefinitely.
 void left()
 {
-  //leftpid(IDEAL_SPEED_TURN, BASE_POWER_TURN, KPT, KIT, KDT);
-  pidpwr = (pidpwrR > 240) ? 160 : 0;
+  //Pivot turn
   rightpid(IDEAL_SPEED_TURN, BASE_POWER_TURN, KPT, KIT, KDT);
+  
+  //Provide an extra boost for turning if robot is not turning 
+  //despite supplying near max power. Else set to 0 for a pivot turn
+  pidpwr = (pidpwrR > 240) ? 160 : 0;
   LR_DUTY = pidpwr;
   RF_DUTY = pidpwrR;
   LF_DUTY = 0;
@@ -455,23 +455,27 @@ void right()
 {  
   leftpid(IDEAL_SPEED_TURN, BASE_POWER_TURN, KPT, KIT, KDT);
   pidpwrR = (pidpwr > 240) ? 160 : 0;
-  //rightpid(IDEAL_SPEED_TURN, BASE_POWER_TURN, KPT, KIT, KDT);
   LF_DUTY = pidpwr;
   RR_DUTY = pidpwrR;
   LR_DUTY = 0;
   RF_DUTY = 0;
 }
 
-// Stop Alex. To replace with bare-metal code later.
+// Stop Alex.
 void stopAlex()
 {
-   LF_DUTY = LR_DUTY = RF_DUTY = RR_DUTY = 0;
+   LF_DUTY = 0;
+   LR_DUTY = 0;
+   RF_DUTY = 0;
+   RR_DUTY = 0;
    PORTD &= 0b10011111;
    PORTB &= 0b11110011;
 }
 
 void leftpid(int idealSpeed, int basePower, int kp, int ki, int kd)
 {
+  //clearFlag is set whenever a new command is received
+  //Clear relevant variables
   if(clearFlag == 1) {
     pidpwr = basePower;
     totalError = 0;
@@ -490,7 +494,7 @@ void leftpid(int idealSpeed, int basePower, int kp, int ki, int kd)
     startFlag = 1;
     totallfT = (lfT - startlfT);
     
-    /* Positive error = too slow; negative error = too fast */
+    //Positive error = too slow; negative error = too fast
     intervalError = idealSpeed - totallfT;
     totalError += intervalError;
     deltaError = intervalError - lastError;
@@ -523,7 +527,7 @@ void rightpid(int idealSpeed, int basePower, int kp, int ki, int kd)
     startFlagR = 1;
     totalrfT = (rfT - startrfT);
     
-    /* Positive error = too slow; negative error = too fast */
+    //Positive error = too slow; negative error = too fast
     intervalErrorR = idealSpeed- totalrfT;
     totalErrorR += intervalErrorR;
     deltaErrorR = intervalErrorR - lastErrorR;
@@ -548,11 +552,6 @@ void clearCounters()
   rfT = 0;
 }
 
-// Clears one particular counter
-void clearOneCounter(int which)
-{
-  clearCounters();
-}
 // Intialize Vincet's internal states
 
 void initializeState()
@@ -596,7 +595,7 @@ void handleCommand(TPacket *command)
       break;
 
     case COMMAND_CLEAR_STATS:
-      clearOneCounter(command->params[0]);
+      clearCounters();
       sendOK();
       break;
     default:

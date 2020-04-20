@@ -47,19 +47,19 @@ volatile TDirection dir = STOP;
 // Constants for PID
 #define IDEAL_SPEED         15  //Roughly 15 counts per 100ms = 150 counts per sec = 3/4 revs per second
 #define IDEAL_SPEED_TURN    5   //Ideal speed for turning.
-#define BASE_POWER          75  //Starting power level
-#define BASE_POWER_TURN     130  //Starting base power for turns
+#define BASE_POWER          90  //Starting power level
+#define BASE_POWER_TURN     120  //Starting base power for turns
 #define PID_INTERVAL        100 //Period between each PID value update
 
 //P,I and D coefficients
-#define KP                  2
+#define KP                  3
 #define KI                  0.4
-#define KD                  5.5
+#define KD                  6
 
 //P,I and D coefficients for turning Old: 15/2/4
 #define KPT                 3
 #define KIT                 0.6
-#define KDT                 8.5
+#define KDT                 8
 
 /*
       Alex's State Variables
